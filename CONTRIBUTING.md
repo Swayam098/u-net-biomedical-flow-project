@@ -1,0 +1,1 @@
+Contributing guidelines (placeholder). Please open issues and PRs with descriptive titles and test coverage.
