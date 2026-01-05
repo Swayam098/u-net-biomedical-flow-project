@@ -19,3 +19,4 @@ Thumbs.db
 # (OPTIONAL) Model weights
 # Comment this if you want to upload trained model
 # models/*.pth
+reports
