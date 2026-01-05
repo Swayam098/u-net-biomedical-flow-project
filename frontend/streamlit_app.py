@@ -3,7 +3,6 @@ import requests
 import numpy as np
 from PIL import Image
 import io
-import matplotlib.pyplot as plt
 
 # -----------------------------
 # Page Configuration
@@ -23,10 +22,10 @@ st.markdown(
     """
     This application demonstrates a **deep learning–based image processing system**
     that enhances ultrasound flow images using a **U-Net architecture**.
-    
-    The model removes tissue clutter and noise, improving blood-flow visualization
-    without manual parameter tuning.
-    
+
+    The model removes tissue clutter and noise, improving visualization of
+    flow-related structures without manual parameter tuning.
+
     **Domain:** Deep Learning  
     **Subdomain:** Image Processing (Biomedical)  
     **SDG:** 3 – Good Health and Well-Being
@@ -39,16 +38,17 @@ st.divider()
 # Sidebar
 # -----------------------------
 st.sidebar.header("⚙️ Controls")
+
 api_url = st.sidebar.text_input(
     "Backend API URL",
     value="http://127.0.0.1:5000/predict"
 )
 
-show_svd = st.sidebar.checkbox("Show SVD Baseline (if available)", value=True)
+show_svd = st.sidebar.checkbox("Show SVD Baseline", value=True)
 show_metrics = st.sidebar.checkbox("Show Quality Metrics", value=True)
 
 # -----------------------------
-# File Upload Section
+# File Upload
 # -----------------------------
 uploaded_file = st.file_uploader(
     "📤 Upload an Ultrasound Image",
@@ -56,16 +56,13 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    # Read image
     image = Image.open(uploaded_file).convert("L")
     image_np = np.array(image)
 
     st.divider()
     st.subheader("📌 Input Image")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image(image, caption="Original Ultrasound Image", use_column_width=True)
+    st.image(image, caption="Original Ultrasound Image", width=350)
 
     # -----------------------------
     # Run Inference
@@ -76,36 +73,65 @@ if uploaded_file is not None:
                 # Prepare request
                 img_bytes = io.BytesIO()
                 image.save(img_bytes, format="PNG")
-                files = {"file": img_bytes.getvalue()}
 
-                response = requests.post(api_url, files=files)
+                response = requests.post(
+                    api_url,
+                    files={"file": img_bytes.getvalue()},
+                    timeout=60
+                )
                 response.raise_for_status()
                 result = response.json()
 
                 # Parse results
-                output_image = np.array(result["unet_output"])
-                svd_image = np.array(result["svd_output"]) if show_svd else None
-                psnr = result.get("psnr", None)
-                ssim = result.get("ssim", None)
-                runtime = result.get("runtime", None)
+                unet_output = np.array(result["unet_output"])
+                svd_output = np.array(result["svd_output"])
+
+                psnr = result.get("psnr")
+                ssim = result.get("ssim")
+                runtime = result.get("runtime")
 
                 # -----------------------------
-                # Display Results
+                # Display normalization
+                # -----------------------------
+                def normalize(img):
+                    img = img.astype(np.float32)
+                    return (img - img.min()) / (img.max() - img.min() + 1e-8)
+
+                input_display = normalize(image_np)
+                unet_display = normalize(unet_output)
+                svd_display = normalize(svd_output)
+
+                # -----------------------------
+                # Results Display (FIXED)
                 # -----------------------------
                 st.divider()
-                st.subheader("📊 Results")
+                st.subheader("📊 Results Comparison")
 
-                cols = st.columns(3 if show_svd else 2)
+                col1, col2, col3 = st.columns(3)
 
-                with cols[0]:
-                    st.image(image_np, caption="Input Image", use_column_width=True)
+                with col1:
+                    st.image(
+                        input_display,
+                        caption="Input Image",
+                        width=300
+                    )
 
-                with cols[1]:
-                    st.image(output_image, caption="U-Net Filtered Output", use_column_width=True)
+                with col2:
+                    st.image(
+                        unet_display,
+                        caption="U-Net Filtered Output",
+                        width=300
+                    )
 
-                if show_svd:
-                    with cols[2]:
-                        st.image(svd_image, caption="SVD Baseline Output", use_column_width=True)
+                with col3:
+                    if show_svd:
+                        st.image(
+                            svd_display,
+                            caption="SVD Baseline Output",
+                            width=300
+                        )
+                    else:
+                        st.empty()
 
                 # -----------------------------
                 # Metrics
@@ -115,6 +141,7 @@ if uploaded_file is not None:
                     st.subheader("📈 Quality Metrics")
 
                     m1, m2, m3 = st.columns(3)
+
                     if psnr is not None:
                         m1.metric("PSNR", f"{psnr:.2f} dB")
                     if ssim is not None:
@@ -123,12 +150,12 @@ if uploaded_file is not None:
                         m3.metric("Runtime", f"{runtime:.2f} s")
 
                 # -----------------------------
-                # Download
+                # Download Output
                 # -----------------------------
                 st.divider()
-                st.subheader("⬇️ Download Output")
+                st.subheader("⬇️ Download U-Net Output")
 
-                out_img = Image.fromarray((output_image * 255).astype(np.uint8))
+                out_img = Image.fromarray((unet_display * 255).astype(np.uint8))
                 buf = io.BytesIO()
                 out_img.save(buf, format="PNG")
 
@@ -152,7 +179,7 @@ st.markdown(
     **Department:** CSE – AIML  
     **Institution:** SRM Institute of Science and Technology  
 
-    This project demonstrates the integration of **Deep Learning** and
-    **Image Processing** for biomedical applications.
+    This project demonstrates the integration of **Deep Learning**
+    and **Image Processing** for biomedical imaging applications.
     """
 )

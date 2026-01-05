@@ -8,7 +8,8 @@ def load_unet_model(model_path):
 
     if os.path.exists(model_path):
         try:
-            model.load_state_dict(torch.load(model_path, map_location=device))
+            state_dict = torch.load(model_path, map_location=device, weights_only=True)
+            model.load_state_dict(state_dict)
             print("✅ Trained model loaded")
         except Exception as e:
             print("⚠️ Model file invalid, using untrained model")

@@ -1,23 +1,21 @@
-# Python cache
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.ipynb_checkpoints/
 
-# Virtual environments
+# Virtual environment
 venv/
-.env/
+.env
 
-# Model weights
-*.pth
-
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
-# Streamlit cache
-.streamlit/
-
-# Notebooks checkpoints
-.ipynb_checkpoints/
-
-# Logs
+# Large / generated files
 *.log
+
+# (OPTIONAL) Model weights
+# Comment this if you want to upload trained model
+# models/*.pth

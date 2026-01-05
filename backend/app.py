@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from PIL import Image
 import numpy as np
 import time
-import io
+from typing import cast
 
 from utils.preprocessing import preprocess_image
 from utils.postprocessing import postprocess_image
@@ -15,8 +15,12 @@ from backend.inference import run_unet_inference
 
 app = Flask(__name__)
 
+# -----------------------------
 # Load model once at startup
-model = load_unet_model("models/unet_model.pth")
+# -----------------------------
+model = load_unet_model("backend/models/unet_model.pth")
+
+
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -29,26 +33,37 @@ def predict():
         file = request.files["file"]
         image = Image.open(file.stream).convert("L")
 
-        input_np = preprocess_image(image)
-        unet_output = run_unet_inference(model, input_np)
-        svd_output = svd_filter_image(input_np)
+        # -----------------------------
+        # Preprocessing
+        # -----------------------------
+        input_np: np.ndarray = preprocess_image(image)
 
-        psnr = compute_psnr(input_np, unet_output)
-        ssim = compute_ssim(input_np, unet_output)
+        # -----------------------------
+        # Inference
+        # -----------------------------
+        unet_output: np.ndarray = run_unet_inference(model, input_np)
+        svd_output: np.ndarray = svd_filter_image(input_np)
 
-        runtime = time.time() - start_time
+        # -----------------------------
+        # Metrics (TYPE ASSERTION – FINAL FIX)
+        # -----------------------------
+        psnr = cast(float, compute_psnr(input_np, unet_output))
+        ssim = cast(float, compute_ssim(input_np, unet_output))
+
+        runtime = cast(float, time.time() - start_time)
 
         return jsonify({
-            "unet_output": unet_output.astype(float).tolist(),
-            "svd_output": svd_output.astype(float).tolist(),
-            "psnr": float(psnr),
-            "ssim": float(ssim),
-            "runtime": float(runtime)
+            "unet_output": unet_output.astype(np.float64).tolist(),
+            "svd_output": svd_output.astype(np.float64).tolist(),
+            "psnr": psnr,
+            "ssim": ssim,
+            "runtime": runtime
         })
 
     except Exception as e:
         print("❌ Backend error:", e)
         return jsonify({"error": "Internal server error"}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)
