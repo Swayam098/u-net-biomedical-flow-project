@@ -6,6 +6,8 @@ import io
 import time
 import matplotlib.pyplot as plt
 import cv2
+from preview_effects import PreviewEffects, GaussianBlurBaseline
+from export_reports import ReportExporter
 
 # --------------------------------------------------
 # Page Config & Styling
@@ -401,11 +403,177 @@ if SHOW_METRICS:
         """, unsafe_allow_html=True)
 
 # --------------------------------------------------
-# Download & Footer
+# A/B Comparison Mode (Optional)
 # --------------------------------------------------
 st.divider()
+st.markdown("### 🔄 **Comparison Mode**")
 
-st.markdown("### 💾 **Download Results**")
+enable_comparison = st.checkbox("📊 Enable A/B Comparison (U-Net vs SVD vs Gaussian)", value=False)
+
+if enable_comparison:
+    st.markdown("**Side-by-side comparison of different denoising methods**")
+    
+    # Generate Gaussian baseline
+    gaussian_output = GaussianBlurBaseline.apply(image_np, sigma=2.0)
+    gaussian_resized = cv2.resize(
+        (np.clip(gaussian_output, 0, 1) * 255).astype(np.uint8),
+        (original_shape[1], original_shape[0])
+    ).astype(np.float32) / 255.0
+    
+    # Compute metrics for all methods
+    from skimage.metrics import peak_signal_noise_ratio as psnr_calc
+    from skimage.metrics import structural_similarity as ssim_calc
+    
+    try:
+        psnr_svd = psnr_calc(image_np, svd_output, data_range=1.0)
+        ssim_svd = ssim_calc(image_np, svd_output, data_range=1.0)
+        
+        psnr_gaussian = psnr_calc(image_np, gaussian_resized, data_range=1.0)
+        ssim_gaussian = ssim_calc(image_np, gaussian_resized, data_range=1.0)
+    except:
+        psnr_svd, ssim_svd = 0, 0
+        psnr_gaussian, ssim_gaussian = 0, 0
+    
+    # 4-panel comparison
+    col1, col2, col3, col4 = st.columns(4, gap="small")
+    
+    with col1:
+        st.markdown('<div class="image-card">', unsafe_allow_html=True)
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.imshow(image_np, cmap="gray", vmin=0, vmax=1)
+        ax.set_title("Original", fontsize=12, fontweight="bold")
+        ax.axis("off")
+        fig.patch.set_facecolor('white')
+        st.pyplot(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="image-card">', unsafe_allow_html=True)
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.imshow(unet_resized, cmap="gray", vmin=0, vmax=1)
+        ax.set_title("U-Net Enhanced", fontsize=12, fontweight="bold")
+        ax.axis("off")
+        fig.patch.set_facecolor('white')
+        st.pyplot(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown('<div class="image-card">', unsafe_allow_html=True)
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.imshow(svd_output, cmap="gray", vmin=0, vmax=1)
+        ax.set_title("SVD Baseline", fontsize=12, fontweight="bold")
+        ax.axis("off")
+        fig.patch.set_facecolor('white')
+        st.pyplot(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown('<div class="image-card">', unsafe_allow_html=True)
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.imshow(gaussian_resized, cmap="gray", vmin=0, vmax=1)
+        ax.set_title("Gaussian Blur", fontsize=12, fontweight="bold")
+        ax.axis("off")
+        fig.patch.set_facecolor('white')
+        st.pyplot(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Metrics comparison table
+    st.markdown("**Metrics Comparison**")
+    comparison_data = {
+        "Method": ["U-Net", "SVD", "Gaussian"],
+        "PSNR (dB)": [f"{psnr:.2f}", f"{psnr_svd:.2f}", f"{psnr_gaussian:.2f}"],
+        "SSIM": [f"{ssim:.4f}", f"{ssim_svd:.4f}", f"{ssim_gaussian:.4f}"]
+    }
+    st.dataframe(comparison_data, use_container_width=True)
+
+# --------------------------------------------------
+# Real-Time Preview Controls
+# --------------------------------------------------
+st.divider()
+st.markdown("### 🎨 **Real-Time Preview Adjustments**")
+
+st.markdown("**Adjust the enhanced image on-the-fly**")
+
+col_intensity, col_blur, col_contrast = st.columns(3, gap="medium")
+
+with col_intensity:
+    intensity = st.slider("🔆 Intensity", 0.8, 1.2, 1.0, 0.05, help="Brightness adjustment")
+
+with col_blur:
+    blur = st.slider("📊 Blur", 0.0, 5.0, 0.0, 0.5, help="Gaussian blur amount")
+
+with col_contrast:
+    contrast = st.slider("🎨 Contrast", 0.8, 1.5, 1.0, 0.05, help="Contrast enhancement")
+
+# Apply preview effects
+preview_config = PreviewEffects.create_preview_config(
+    intensity=intensity,
+    blur=blur,
+    contrast=contrast,
+    saturation=0.0
+)
+
+preview_image = PreviewEffects.apply_all_effects(
+    unet_resized,
+    **preview_config
+)
+
+# Display preview
+st.markdown("**Live Preview**")
+st.markdown('<div class="image-card">', unsafe_allow_html=True)
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.imshow(preview_image, cmap="gray", vmin=0, vmax=1)
+ax.set_title("Preview with Adjustments", fontsize=14, fontweight="bold")
+ax.axis("off")
+fig.patch.set_facecolor('white')
+st.pyplot(fig, use_container_width=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --------------------------------------------------
+# Export Reports
+# --------------------------------------------------
+st.divider()
+st.markdown("### 📄 **Export Reports**")
+
+st.markdown("**Generate professional reports in PDF or PNG format**")
+
+col_png, col_pdf = st.columns(2, gap="medium")
+
+exporter = ReportExporter()
+
+with col_png:
+    try:
+        png_data = exporter.export_png(image_np, unet_resized, psnr, ssim, runtime)
+        st.download_button(
+            "🖼️ Export as PNG",
+            data=png_data,
+            file_name="unet_report.png",
+            mime="image/png",
+            use_container_width=True
+        )
+    except Exception as e:
+        st.error(f"PNG export error: {e}")
+
+with col_pdf:
+    try:
+        pdf_data = exporter.export_pdf(image_np, unet_resized, psnr, ssim, runtime)
+        if pdf_data:
+            st.download_button(
+                "📋 Export as PDF",
+                data=pdf_data,
+                file_name="unet_report.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.warning("⚠️ PDF export not available (reportlab issue)")
+    except Exception as e:
+        st.error(f"PDF export error: {e}")
+
+# Download enhanced image
+st.markdown("---")
+st.markdown("### 💾 **Download Enhanced Image**")
+
 out_img = Image.fromarray((np.clip(unet_output, 0, 1) * 255).astype(np.uint8))
 buf = io.BytesIO()
 out_img.save(buf, format="PNG")
