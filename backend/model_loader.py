@@ -1,5 +1,5 @@
 import torch
-from inference import UNet
+from backend.inference import UNet
 import os
 
 def load_unet_model(model_path):

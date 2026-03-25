@@ -7,7 +7,20 @@ import time
 import matplotlib.pyplot as plt
 import cv2
 from preview_effects import PreviewEffects, GaussianBlurBaseline
-from export_reports import ReportExporter
+
+# Force fresh import of export_reports
+import importlib
+import sys
+if 'export_reports' in sys.modules:
+    del sys.modules['export_reports']
+
+from export_reports import ReportExporter, HAS_REPORTLAB
+
+# Debug: Check reportlab status
+if not HAS_REPORTLAB:
+    print("WARNING: reportlab not available in Streamlit context")
+else:
+    print("OK: reportlab available in Streamlit context")
 
 # --------------------------------------------------
 # Page Config & Styling
@@ -165,8 +178,12 @@ if uploaded_file is None:
 # --------------------------------------------------
 # Load Image
 # --------------------------------------------------
-image = Image.open(uploaded_file).convert("L")
-image_np = np.array(image) / 255.0
+if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert("L")
+    image_np = np.array(image) / 255.0
+else:
+    st.error("File upload failed")
+    st.stop()
 
 # --------------------------------------------------
 # Upload Preview & Process Button
@@ -252,14 +269,21 @@ svd_output = st.session_state.svd_output
 # Medical Grayscale Visualization Function
 # --------------------------------------------------
 def show_medical_image(img, title, subtitle=""):
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(img, cmap="gray", vmin=0, vmax=1)
+    # Convert to uint8 to avoid memory issues with matplotlib
+    if img.dtype != np.uint8:
+        img_display = (np.clip(img, 0, 1) * 255).astype(np.uint8)
+    else:
+        img_display = img
+    
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=80)
+    ax.imshow(img_display, cmap="gray", vmin=0, vmax=255)
     ax.set_title(title, fontsize=14, fontweight="bold", pad=10)
     if subtitle:
         ax.text(0.5, -0.05, subtitle, ha='center', transform=ax.transAxes, fontsize=10, style='italic')
     ax.axis("off")
     fig.patch.set_facecolor('white')
     st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
 
 st.divider()
 st.markdown("### 📊 **Results & Comparison**")
@@ -310,13 +334,16 @@ blend = (1 - alpha) * image_np + alpha * unet_resized
 col_blend = st.columns(1)[0]
 with col_blend:
     st.markdown('<div class="image-card">', unsafe_allow_html=True)
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.imshow(blend, cmap="gray", vmin=0, vmax=1)
+    # Convert to uint8 to avoid memory issues
+    blend_uint8 = (np.clip(blend, 0, 1) * 255).astype(np.uint8)
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=80)
+    ax.imshow(blend_uint8, cmap="gray", vmin=0, vmax=255)
     label_text = f"Original" if alpha < 0.1 else f"Enhanced" if alpha > 0.9 else f"Blend ({alpha:.0%})"
     ax.set_title(label_text, fontsize=14, fontweight="bold", pad=10)
     ax.axis("off")
     fig.patch.set_facecolor('white')
     st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------
@@ -439,43 +466,51 @@ if enable_comparison and svd_output is not None:
     
     with col1:
         st.markdown('<div class="image-card">', unsafe_allow_html=True)
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.imshow(image_np, cmap="gray", vmin=0, vmax=1)
+        image_np_uint8 = (np.clip(image_np, 0, 1) * 255).astype(np.uint8)
+        fig, ax = plt.subplots(figsize=(4, 4), dpi=80)
+        ax.imshow(image_np_uint8, cmap="gray", vmin=0, vmax=255)
         ax.set_title("Original", fontsize=12, fontweight="bold")
         ax.axis("off")
         fig.patch.set_facecolor('white')
         st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="image-card">', unsafe_allow_html=True)
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.imshow(unet_resized, cmap="gray", vmin=0, vmax=1)
+        unet_resized_uint8 = (np.clip(unet_resized, 0, 1) * 255).astype(np.uint8)
+        fig, ax = plt.subplots(figsize=(4, 4), dpi=80)
+        ax.imshow(unet_resized_uint8, cmap="gray", vmin=0, vmax=255)
         ax.set_title("U-Net Enhanced", fontsize=12, fontweight="bold")
         ax.axis("off")
         fig.patch.set_facecolor('white')
         st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col3:
         st.markdown('<div class="image-card">', unsafe_allow_html=True)
-        fig, ax = plt.subplots(figsize=(4, 4))
+        fig, ax = plt.subplots(figsize=(4, 4), dpi=80)
         if svd_output is not None:
-            ax.imshow(svd_output, cmap="gray", vmin=0, vmax=1)
+            svd_output_uint8 = (np.clip(svd_output, 0, 1) * 255).astype(np.uint8)
+            ax.imshow(svd_output_uint8, cmap="gray", vmin=0, vmax=255)
         ax.set_title("SVD Baseline", fontsize=12, fontweight="bold")
         ax.axis("off")
         fig.patch.set_facecolor('white')
         st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col4:
         st.markdown('<div class="image-card">', unsafe_allow_html=True)
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.imshow(gaussian_resized, cmap="gray", vmin=0, vmax=1)
+        gaussian_resized_uint8 = (np.clip(gaussian_resized, 0, 1) * 255).astype(np.uint8)
+        fig, ax = plt.subplots(figsize=(4, 4), dpi=80)
+        ax.imshow(gaussian_resized_uint8, cmap="gray", vmin=0, vmax=255)
         ax.set_title("Gaussian Blur", fontsize=12, fontweight="bold")
         ax.axis("off")
         fig.patch.set_facecolor('white')
         st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Metrics comparison table
@@ -524,12 +559,14 @@ preview_image = PreviewEffects.apply_all_effects(
 # Display preview
 st.markdown("**Live Preview**")
 st.markdown('<div class="image-card">', unsafe_allow_html=True)
-fig, ax = plt.subplots(figsize=(8, 6))
-ax.imshow(preview_image, cmap="gray", vmin=0, vmax=1)
+preview_image_uint8 = (np.clip(preview_image, 0, 1) * 255).astype(np.uint8)
+fig, ax = plt.subplots(figsize=(8, 6), dpi=80)
+ax.imshow(preview_image_uint8, cmap="gray", vmin=0, vmax=255)
 ax.set_title("Preview with Adjustments", fontsize=14, fontweight="bold")
 ax.axis("off")
 fig.patch.set_facecolor('white')
 st.pyplot(fig, use_container_width=True)
+plt.close(fig)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------
@@ -569,9 +606,11 @@ with col_pdf:
                 use_container_width=True
             )
         else:
-            st.warning("⚠️ PDF export not available (reportlab issue)")
+            st.warning("⚠️ PDF export not available (reportlab not installed)")
     except Exception as e:
-        st.error(f"PDF export error: {e}")
+        st.error(f"PDF export error: {str(e)}")
+        with st.expander("Debug info"):
+            st.code(str(e))
 
 # Download enhanced image
 st.markdown("---")
@@ -607,7 +646,7 @@ st.divider()
 st.markdown(
     """
     <div style='text-align:center; font-size:14px;'>
-    Developed by <b>Swayam Vijay Mehra</b> | CSE (AIML) | SRM Institute of Science and Technology  
+    Developed by <b>Swayam Vijay Mehra AND Prateek Shulka</b> | CSE (AIML) | SRM Institute of Science and Technology  
     <br>
     Minor Project – Deep Learning & Biomedical Image Processing
     </div>

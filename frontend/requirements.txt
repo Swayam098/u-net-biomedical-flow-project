@@ -1,5 +1,0 @@
-streamlit
-requests
-numpy
-pillow
-matplotlib

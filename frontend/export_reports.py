@@ -19,8 +19,10 @@ try:
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     from reportlab.lib import colors
     HAS_REPORTLAB = True
-except ImportError:
+    print("✅ [export_reports] reportlab loaded successfully")
+except ImportError as e:
     HAS_REPORTLAB = False
+    print(f"⚠️ [export_reports] reportlab import failed: {e}")
 
 
 class ReportExporter:
@@ -64,7 +66,7 @@ class ReportExporter:
         size: Tuple[int, int] = (600, 300)
     ) -> Image.Image:
         """Create histogram comparison image"""
-        fig, ax = plt.subplots(figsize=(8, 4))
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=80)
         
         ax.hist(original.flatten(), bins=256, range=(0, 1), alpha=0.6, label='Original', color='#FF6B6B', edgecolor='none')
         ax.hist(enhanced.flatten(), bins=256, range=(0, 1), alpha=0.6, label='Enhanced', color='#0066CC', edgecolor='none')
@@ -77,14 +79,17 @@ class ReportExporter:
         
         fig.patch.set_facecolor('white')
         
-        # Convert to PIL
+        # Convert to PIL using buffer_rgba (newer matplotlib API)
         canvas = FigureCanvasAgg(fig)
         canvas.draw()
         renderer = canvas.get_renderer()
-        raw_data = renderer.tostring_rgb()
         
+        # Use buffer_rgba() for compatibility with newer matplotlib
+        rgba_buffer = renderer.buffer_rgba()
         size_tuple = canvas.get_width_height()
-        hist_img = Image.frombytes('RGB', size_tuple, raw_data)
+        hist_img = Image.frombytes('RGBA', size_tuple, rgba_buffer)
+        # Convert RGBA to RGB
+        hist_img = hist_img.convert('RGB')
         plt.close(fig)
         
         return hist_img
