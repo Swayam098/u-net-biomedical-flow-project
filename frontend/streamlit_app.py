@@ -410,7 +410,7 @@ st.markdown("### 🔄 **Comparison Mode**")
 
 enable_comparison = st.checkbox("📊 Enable A/B Comparison (U-Net vs SVD vs Gaussian)", value=False)
 
-if enable_comparison:
+if enable_comparison and svd_output is not None:
     st.markdown("**Side-by-side comparison of different denoising methods**")
     
     # Generate Gaussian baseline
@@ -460,7 +460,8 @@ if enable_comparison:
     with col3:
         st.markdown('<div class="image-card">', unsafe_allow_html=True)
         fig, ax = plt.subplots(figsize=(4, 4))
-        ax.imshow(svd_output, cmap="gray", vmin=0, vmax=1)
+        if svd_output is not None:
+            ax.imshow(svd_output, cmap="gray", vmin=0, vmax=1)
         ax.set_title("SVD Baseline", fontsize=12, fontweight="bold")
         ax.axis("off")
         fig.patch.set_facecolor('white')
@@ -485,6 +486,8 @@ if enable_comparison:
         "SSIM": [f"{ssim:.4f}", f"{ssim_svd:.4f}", f"{ssim_gaussian:.4f}"]
     }
     st.dataframe(comparison_data, use_container_width=True)
+elif enable_comparison:
+    st.warning("⚠️ SVD output not available - enable SVD in sidebar")
 
 # --------------------------------------------------
 # Real-Time Preview Controls
