@@ -37,13 +37,13 @@ st.markdown("""
     [data-testid="stMetricLabel"] {
         font-size: 1.1rem !important;
         font-weight: 700 !important;
-        color: #1a1a1a !important;
+        color: #FFFFFF !important;
         margin-top: 0.5rem;
     }
     
     [data-testid="stMetricDelta"] {
         font-size: 0.9rem !important;
-        color: #666 !important;
+        color: #B0B0B0 !important;
     }
     
     /* Remove the white divider/border */
