@@ -2,7 +2,7 @@ import base64
 import io
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import numpy as np
 import torch
@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
 	sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.inference import estimate_memory_mb, parameter_count
+from backend import inference as inference_utils
 from backend.model_loader import load_unet_model, resolve_device
 from backend.optimization import OptimizationConfig, OptimizedUNetInference
 
@@ -50,7 +50,8 @@ def _decode_upload_to_numpy(file_storage) -> np.ndarray:
 
 
 def _encode_image(img: np.ndarray) -> str:
-	arr = np.clip(img * 255.0, 0, 255).astype(np.uint8)
+	image_array = np.asarray(img, dtype=np.float32)
+	arr = np.clip(image_array * 255.0, 0, 255).astype(np.uint8)
 	pil_img = Image.fromarray(arr)
 	buf = io.BytesIO()
 	pil_img.save(buf, format="PNG")
@@ -72,7 +73,7 @@ def health() -> Any:
 
 @app.get("/stats")
 def stats() -> Any:
-	total, trainable = parameter_count(model)
+	total, trainable = inference_utils.parameter_count(model)
 	return jsonify(
 		{
 			"device": str(DEVICE),
@@ -88,7 +89,7 @@ def stats() -> Any:
 			"model": {
 				"total_params": total,
 				"trainable_params": trainable,
-				"estimated_memory_mb": round(estimate_memory_mb(), 2),
+				"estimated_memory_mb": round(inference_utils.estimate_memory_mb(), 2),
 			},
 		}
 	)
@@ -102,9 +103,10 @@ def predict() -> Any:
 
 	image_np = _decode_upload_to_numpy(file)
 	result = optimized.predict(image_np=image_np, mc_samples=1)
+	prediction = cast(np.ndarray, result["prediction"])
 
 	response: Dict[str, Any] = {
-		"prediction": _encode_image(result["prediction"]),
+		"prediction": _encode_image(prediction),
 		"runtime_sec": float(result["runtime"]),
 		"optimized": bool(result["optimized"]),
 		"fp16": bool(result["fp16"]),
@@ -128,8 +130,9 @@ def predict_uncertainty() -> Any:
 	mc_samples = max(2, min(mc_samples, 50))
 	image_np = _decode_upload_to_numpy(file)
 	result = optimized.predict(image_np=image_np, mc_samples=mc_samples)
+	prediction = cast(np.ndarray, result["prediction"])
+	uncertainty = cast(np.ndarray, result["uncertainty"])
 
-	uncertainty = result["uncertainty"]
 	uncertainty_max = float(np.max(uncertainty))
 	if uncertainty_max <= 1e-8:
 		uncertainty_norm = np.zeros_like(uncertainty, dtype=np.float32)
@@ -137,7 +140,7 @@ def predict_uncertainty() -> Any:
 		uncertainty_norm = uncertainty / uncertainty_max
 
 	response: Dict[str, Any] = {
-		"prediction": _encode_image(result["prediction"]),
+		"prediction": _encode_image(prediction),
 		"uncertainty_map": _encode_image(uncertainty_norm),
 		"uncertainty_mean": float(np.mean(uncertainty)),
 		"mc_samples": mc_samples,

@@ -31,6 +31,9 @@ class DoubleConv(nn.Module):
 class UNet(nn.Module):
     """Compact U-Net aligned with project architecture (1->32->64->128->256)."""
 
+    checkpoint_loaded: bool
+    checkpoint_path: str
+
     def __init__(self, dropout_p: float = 0.1) -> None:
         super().__init__()
         self.enc1 = DoubleConv(1, 32, dropout_p)
