@@ -97,7 +97,7 @@ A selection of exported visuals from recent experiments and run summaries.
 	</tr>
 	<tr>
 		<td align="center">
-			<img src="results/images/before_after (1).png" alt="Before / After" width="300" />
+			<img src="results/images/before_after%20(1).png" alt="Before / After" width="300" />
 			<br /><strong>Before / After</strong>
 		</td>
 		<td align="center">
@@ -107,11 +107,11 @@ A selection of exported visuals from recent experiments and run summaries.
 	</tr>
 	<tr>
 		<td align="center">
-			<img src="results/images/robustness (1).png" alt="Robustness Plot" width="300" />
+			<img src="results/images/robustness%20(1).png" alt="Robustness Plot" width="300" />
 			<br /><strong>Robustness</strong>
 		</td>
 		<td align="center">
-			<img src="results/images/System architecture diagram.png" alt="System Architecture" width="300" />
+			<img src="results/images/System%20architecture%20diagram.png" alt="System Architecture" width="300" />
 			<br /><strong>System Architecture</strong>
 		</td>
 	</tr>
