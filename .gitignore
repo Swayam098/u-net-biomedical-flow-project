@@ -28,6 +28,7 @@ experiments/**/checkpoint/
 experiments/**/models/
 experiments/**/exports/
 results/
+!results/images/
 *.pt
 *.pth
 *.ckpt
