@@ -1,0 +1,498 @@
+
+I. INTRODUCTION
+Ultrasound is widely used because it is non-ionizing,
+portable, and cost-effective. However, coherent wave interference introduces speckle noise that reduces contrast, obscures
+lesion margins, and limits both human and automated interpretation. Speckle is not simple additive white noise; it is signal
+dependent and spatially structured, which makes restoration
+difficult without loss of clinically relevant texture.
+Classical denoisers (Gaussian smoothing, wavelet thresholding, BM3D-like patch priors) can suppress noise, but often
+at the cost of edge attenuation. Deep models, especially UNet architectures, can learn richer restoration priors from
+data and preserve structure better than handcrafted filtering
+in many image restoration tasks. Yet, most denoisers used
+in practice remain point estimators: they output one image
+without reporting how certain the model is about any pixel.
+For medical deployment, this is a critical gap. If a model
+is uncertain near lesion boundaries, the system should expose
+this uncertainty rather than hide it. We therefore investigate
+a denoising framework that pairs a compact U-Net with MC
+dropout at inference to produce both a restored image and an
+uncertainty map.
+From a research methodology perspective, denoising quality
+in medical imaging must be assessed under both fidelity and
+reliability criteria. Fidelity concerns whether the output is close
+to an underlying reference; reliability concerns whether the
+model can indicate where this fidelity may degrade. Many
+studies report only fidelity metrics and therefore do not address
+the practical decision-support requirement in medical contexts.
+In contrast, this paper explicitly treats uncertainty estimation
+as a first-class research outcome.
+Another challenge is evaluation realism. Reported denoising
+gains can be inflated when experiments are restricted to one
+corruption level or one split configuration. To reduce this risk,
+we include robustness analysis under multiple train–test noise
+pairings, provide transparent reporting about available versus
+missing metrics in current artifacts, and frame conclusions
+according to evidence strength rather than aspirational claims.
+Research questions:
+• RQ1: Does the proposed enhanced U-Net improve
+restoration quality over a baseline U-Net model?
+• RQ2: How robust is performance under train–test speckle
+mismatch?
+• RQ3: Do MC-dropout uncertainty maps localize difficult
+restoration regions?
+Contributions:
+• A reproducible ultrasound denoising pipeline built around
+a compact U-Net with optional wavelet-aware preprocessing and MC-dropout uncertainty.
+• A structured evaluation protocol with aggregate results
+and robustness sweeps across noise conditions.
+• An uncertainty-aware analysis that complements fidelity
+metrics and supports deployment-oriented interpretation.
+• A detailed research reporting template that explicitly
+documents limitations, threats to validity, and required
+steps toward publication-grade evidence.
+II. CLINICAL MOTIVATION AND PROBLEM STATEMENT
+In breast ultrasound workflows, image quality directly impacts lesion visibility, contour readability, and confidence in
+qualitative assessment. Speckle reduces conspicuity of subtle
+boundaries and can induce texture confusion, especially in heterogeneous tissue regions. Any enhancement system intended
+for clinical decision support should therefore satisfy at least
+three constraints: preserve diagnostically relevant structures,
+reduce corruption artifacts, and provide interpretable confidence indicators.
+Let x ∈ [0, 1]H×W denote an idealized clean ultrasound
+image and x˜ its observed noisy version. We seek a restoration
+function fθ that maps noisy input to a denoised output while
+preserving lesion boundaries and clinically relevant structure.
+In parallel, we seek an uncertainty function uθ that assigns
+higher values to visually ambiguous or difficult regions.
+This perspective motivates a dual-output system: one output
+for restoration, one output for reliability characterization. In
+this work, MC dropout is used as an approximate Bayesian
+mechanism to derive uθ through predictive variance.
+III. RELATED WORK
+Classical image denoising includes local smoothing, wavelet
+shrinkage, and non-local patch methods. BM3D remains a
+strong classical baseline in natural-image denoising due to
+collaborative filtering in a transformed patch domain [4]. In
+ultrasound, these methods reduce speckle but can blur lesion
+boundaries when noise suppression is aggressive.
+Deep denoisers such as CNN-based residual learning and UNet-style encoder–decoder networks model nonlinear image
+priors and often outperform fixed-filter approaches [8], [1].
+For medical images, skip connections are particularly valuable
+because they preserve high-resolution structural detail during
+reconstruction.
+Uncertainty estimation in deep learning has gained importance for safety-critical settings. MC dropout approximates
+Bayesian inference by keeping dropout active at test time and
+sampling stochastic predictions [2]. In medical imaging, uncertainty maps are increasingly used to identify low-confidence
+predictions and improve interpretability [9].
+Relative to prior work, this paper focuses on an engineeringresearch bridge: an uncertainty-aware denoising model that is
+both quantitatively evaluated and integrated into a deployable
+backend/frontend stack for interactive analysis.
+Recent restoration literature also highlights the role of
+self-supervised and noise-model-aware training, including
+Noise2Noise and related paradigms, for settings where clean
+references are limited [10]. While our present implementation
+uses supervised synthetic corruption, the broader methodological implication is that ultrasound enhancement may benefit
+from hybrid supervision strategies in future iterations.
+In medical AI practice, reproducibility and reporting transparency are increasingly recognized as essential for model
+credibility. This includes explicit split definitions, hyperparameter disclosure, environment specification, and realistic
+limitations analysis. The present paper adopts this reporting
+stance and treats it as part of the research contribution rather
+than supplementary material.
+IV. PROPOSED METHODOLOGY
+This section presents the complete proposed method as a
+single end-to-end framework for ultrasound enhancement with
+uncertainty estimation. The pipeline is designed to improve
+image quality while simultaneously quantifying prediction
+reliability.
+A. Method Design Objectives
+The proposed methodology is built around three design
+objectives:
+• Fidelity objective: suppress speckle noise while preserving lesion boundaries and structural detail.
+• Reliability objective: provide pixel-wise uncertainty
+cues to identify low-confidence regions.
+• Deployability objective: support deterministic and
+uncertainty-aware inference through a practical API+UI
+workflow.
+These objectives guide both the model design and the
+evaluation protocol.
+B. Core Method Components
+The proposed method integrates four core components:
+• Preprocessing module: grayscale conversion, resizing to
+256 × 256, and intensity normalization to [0, 1].
+• Optional wavelet preconditioning: configurable softthreshold denoising in the wavelet domain prior to deep
+inference.
+• U-Net restoration module: compact encoder-decoder
+with skip connections and dropout-enabled convolution
+blocks.
+• Uncertainty module: MC-dropout inference that aggregates multiple stochastic predictions into mean output and
+variance map.
+The U-Net backbone follows a 1-32-64-128-256 channel
+progression and uses mirrored decoder stages for structurepreserving reconstruction.
+C. Stage-Wise Pipeline
+The proposed methodology is organized into six stages:
+1) Input Acquisition: A breast ultrasound image is provided by the user or evaluation dataset.
+2) Preprocessing: The image is converted to grayscale (if
+needed), resized to 256 × 256, and normalized to [0, 1].
+3) Optional Wavelet Preconditioning: A configurable
+Haar-wavelet soft-thresholding step is applied to reduce
+high-frequency corruption before deep inference.
+4) Deep Denoising: A compact U-Net performs image
+restoration. Two operating modes are supported:
+• Deterministic mode for low-latency enhancement.
+• Stochastic MC-dropout mode for uncertainty-aware
+enhancement.
+5) Uncertainty Estimation: In MC mode, multiple
+stochastic passes are aggregated to produce a mean denoised image and a pixel-wise uncertainty map derived
+from prediction variability.
+6) Output and Analysis: The system returns denoised
+output, uncertainty map, and runtime metadata for interactive review in Streamlit and quantitative analysis
+using PSNR/SSIM/MAE (where available).
+D. Training and Inference Strategy
+Training uses supervised noisy-clean pairs with configurable
+objectives. The baseline uses mean squared error, while alternative losses (L1/frequency-aware) are available for exploratory studies. Checkpointing is performed in deploymentready and experiment-ready paths to support reproducibility.
+At inference time, users can select between deterministic
+and MC-dropout modes. Deterministic mode prioritizes latency, while MC mode prioritizes reliability-aware interpretation through prediction variability.
+E. Why This Method Is Different
+Compared with conventional deterministic denoising
+pipelines, the proposed methodology explicitly couples
+restoration and reliability estimation in one integrated
+workflow. Instead of producing only a denoised image, the
+method produces:
+• a restored image for visual quality improvement,
+• a pixel-wise uncertainty map for confidence-aware interpretation,
+• runtime metadata for operational evaluation.
+This dual-output design is central to the proposed contribution and directly supports the research questions on fidelity,
+robustness, and uncertainty behavior.
+F. Methodological Rationale
+The proposed method is designed to address two practical
+requirements that are often treated separately in ultrasound
+enhancement studies:
+• High-quality restoration: achieved through U-Net feature fusion and skip connections that preserve structural
+detail.
+• Reliability awareness: achieved through MC-dropout
+uncertainty that indicates where model predictions are
+less stable.
+By combining both requirements in one deployable pipeline,
+the method moves from purely image-enhancement performance toward clinically useful decision support.
+G. Proposed Contribution Over Baseline Practice
+Compared with a conventional deterministic denoiser, the
+proposed methodology introduces:
+• dual-output inference (restored image + uncertainty map),
+• robustness-oriented evaluation across train–test noise mismatch,
+• an implementation path that is directly deployable
+through API endpoints and UI-based qualitative analysis.
+TABLE I
+EVALUATION TARGETS AND AVAILABILITY
+Comparator Metric Availability Source
+U-Net (MSE) PSNR, SSIM project table
+U-Net + Hybrid + Noise PSNR, SSIM project table
+MAE summary not exported UI/per-image only
+This integrated design is the central methodological contribution of the paper.
+V. EXPERIMENTAL DESIGN
+A. Dataset and Splits
+Experiments use BUSI-style ultrasound images [5]. The
+training script performs a seeded random split with default
+validation ratio 0.2. Images are resized to 256 × 256 for all
+runs.
+To maintain experimental consistency, all comparisons use
+identical preprocessing and image geometry. The same core
+architecture is reused across baseline and enhanced settings,
+so observed gains are attributable to training/inference strategy
+differences rather than arbitrary architectural inflation.
+B. Protocol and Hypotheses
+We evaluate three hypotheses aligned with RQ1–RQ3:
+• H1: Enhanced U-Net achieves higher PSNR/SSIM (and
+lower MAE where available) than baseline U-Net.
+• H2: Performance decreases under train–test noise mismatch, but remains acceptable within moderate mismatch.
+• H3: High uncertainty concentrates in visually challenging
+regions (speckle-heavy background and boundary transitions).
+C. Baselines and Comparators
+We compare model variants currently available in the project
+artifacts. Classical comparators are included for context in
+the literature discussion, while the quantitative table reports
+measured values from available logs.
+The current artifact-backed comparison is intentionally conservative: only values with explicit exported evidence are
+treated as quantitative claims. This avoids over-interpretation
+and aligns with robust scientific reporting practice.
+D. Metrics
+We report PSNR, SSIM [6], and MAE when available.
+PSNR summarizes reconstruction fidelity relative to mean
+squared error, SSIM evaluates structural similarity, and MAE
+provides an interpretable absolute-error measure.
+E. Implementation Details
+Default retraining parameters are: 12 epochs, batch size 8,
+learning rate 10−3, Adam optimizer, and synthetic training
+noise standard deviation 0.03. Inference supports FP32 and
+optional FP16. MC sample count is user-controlled in the
+interface (default 10).
+Training checkpoints are persisted in two locations to support both deployment and experiment reproducibility. Runtime
+behavior (including per-request latency and model-loading
+status) is exposed by the backend and surfaced in the user
+interface for transparent operational profiling.
+F. Reproducibility Protocol
+The implementation includes deterministic seeding for
+Python, NumPy, and PyTorch random number generators. This
+supports repeatable split generation and improves comparability across retraining runs. A publication-grade extension
+should additionally report exact package versions, hardware
+details, and confidence intervals across multiple random seeds.
+VI. SYSTEM ARCHITECTURE
+The system is implemented as a full-stack application with
+three main components. The frontend is built with Streamlit
+and provides an interactive interface for image upload, visualization, and result inspection. The backend is implemented
+using Flask and exposes inference endpoints for deterministic
+denoising and uncertainty-aware prediction. The model itself
+is implemented in PyTorch.
+The processing flow is: input image → preprocessing →
+U-Net inference → optional Monte Carlo dropout sampling
+→ denoised output + uncertainty map.
+Fig. 1. System flow diagram for ultrasound denoising with uncertainty
+estimation.
+TABLE II
+LAYER-WISE ARCHITECTURE OF THE PROPOSED U-NET
+Stage Operation Output Tensor Size
+Input Grayscale image 1 × 256 × 256
+Enc-1 DoubleConv (3 × 3), Dropout 32 × 256 × 256
+Pool-1 MaxPool (2 × 2) 32 × 128 × 128
+Enc-2 DoubleConv (3 × 3), Dropout 64 × 128 × 128
+Pool-2 MaxPool (2 × 2) 64 × 64 × 64
+Enc-3 DoubleConv (3 × 3), Dropout 128 × 64 × 64
+Pool-3 MaxPool (2 × 2) 128 × 32 × 32
+Bottleneck DoubleConv (3 × 3), Dropout 256 × 32 × 32
+Up-3 Transposed Conv + concat(Enc-3) 256 × 64 × 64
+Dec-3 DoubleConv (3 × 3), Dropout 128 × 64 × 64
+Up-2 Transposed Conv + concat(Enc-2) 128 × 128 × 128
+Dec-2 DoubleConv (3 × 3), Dropout 64 × 128 × 128
+Up-1 Transposed Conv + concat(Enc-1) 64 × 256 × 256
+Dec-1 DoubleConv (3 × 3), Dropout 32 × 256 × 256
+Output Conv (1 × 1) + Sigmoid 1 × 256 × 256
+Fig. 2. System architecture diagram showing module interactions and UI
+integration.
+A. Proposed Network Architecture (Layer-Wise)
+To make the model definition fully reproducible, Table II
+provides the layer-wise architecture used in this work. Input
+resolution is fixed at 256 × 256 with one grayscale channel.
+The architecture follows a 3-level encoder, bottleneck, and
+symmetric decoder with skip concatenations.
+The final sigmoid layer constrains output intensities to [0, 1],
+matching the normalized target domain. Dropout is retained
+in all convolutional blocks so the same architecture supports
+both deterministic inference and MC-dropout sampling for
+uncertainty estimation.
+Architecturally, the separation between API-layer inference
+and UI-layer analysis supports research operations. The back-
+end can be benchmarked independently, while the frontend
+can be used for qualitative review, uncertainty inspection, and
+report generation. This modularity reduces coupling between
+modeling code and presentation logic, which is important for
+experimental maintainability.
+VII. RESULTS
+A. Quantitative Comparison (RQ1)
+Table IV reports aggregate metrics from project artifacts.
+The enhanced model improves PSNR by +6.98 dB and SSIM
+by +0.254 over the baseline U-Net (MSE), supporting H1.
+These gains are substantial for ultrasound denoising and indicate stronger restoration of both intensity fidelity and structural
+consistency.
+The relative improvement is also meaningful when interpreted proportionally. The SSIM increase from 0.488 to 0.742
+corresponds to approximately 52% relative gain over baseline
+structural similarity. In restoration studies, improvements of
+this magnitude generally indicate not only reduced noise but
+improved preservation of image organization.
+Because MAE was not exported in the same aggregate table,
+we do not over-claim MAE improvements at dataset level. This
+is an explicit reporting limitation rather than an omitted result.
+B. Robustness Under Noise Mismatch (RQ2)
+Table V and Fig. 5 summarize train–test mismatch behavior.
+Best performance occurs at low matched noise (0.2/0.2), with
+a monotonic decline as test noise increases. At matched 0.4/0.4
+and 0.6/0.6 settings, performance remains comparatively stable, indicating reasonable adaptation to training corruption
+level. These observations support H2: mismatch hurts performance, but degradation is gradual rather than catastrophic.
+C. Uncertainty Behavior (RQ3)
+The MC-dropout output exposes spatially varying uncertainty rather than a single scalar confidence. In qualitative
+examples, high-variance regions co-localize with noisy texture
+and boundary transitions, while homogeneous regions show
+lower variance. This behavior is consistent with H3 and
+suggests practical value for decision support: clinicians can
+visually inspect where restoration is less trustworthy.
+A useful practical interpretation is uncertainty-guided attention: instead of trusting the denoised image uniformly, downstream users can inspect high-variance areas first. This does
+not replace diagnosis but can improve review prioritization.
+D. Qualitative Findings
+Fig. 3 shows clear reduction of speckle granularity with
+preserved large-scale structure. Fig. 4 highlights residual error
+concentration around challenging structures. Together, these
+visual findings align with the quantitative PSNR/SSIM gains.
+Additional qualitative snapshots from project notebook exports are provided in Fig. 6 and Fig. 7. These examples were
+generated by the same project pipeline and provide supplementary visual evidence of consistent enhancement behavior.
+TABLE III
+CORE TRAINING AND INFERENCE CONFIGURATION
+Component Setting
+Input size 256 × 256
+Input channels 1 (grayscale)
+U-Net dropout 0.1
+Optimizer Adam
+Initial learning rate 10−3
+Batch size 8
+Epochs 12
+Validation split 0.2
+Training noise std. 0.03
+MC dropout samples 2–30 in UI, 10 default
+Inference precision FP32 / optional FP16
+TABLE IV
+SUMMARY OF RECORDED RESULTS
+Method PSNR (dB) SSIM MAE
+U-Net (MSE) 20.04 0.488 Not exported
+U-Net + Hybrid + Noise 27.02 0.742 Not exported
+E. Statistical Rigor and Current Gaps
+The current repository results represent a strong pilot benchmark but do not yet include repeated-run confidence intervals,
+fold-level variance, or significance testing. Therefore, conclusions are framed as evidence-supported but preliminary. A
+full statistical protocol (multi-seed training, bootstrap confidence intervals, paired tests per image) is recommended for
+publication-grade claims.
+Specifically, a future statistical pipeline should include: (i)
+at least 3–5 independent seeds per setting, (ii) per-image metric distributions, (iii) paired hypothesis tests between model
+variants, and (iv) uncertainty-error association analysis (e.g.,
+correlation between predictive variance and absolute residual
+magnitude).
+VIII. DISCUSSION
+The experimental evidence supports all three research questions at pilot-study level. For RQ1, the improved PSNR/SSIM
+over baseline indicate clear restoration gains. For RQ2, robustness curves confirm expected sensitivity to mismatch while
+preserving usable quality across tested conditions. For RQ3,
+uncertainty maps add clinically relevant context by flagging
+potentially unreliable regions.
+Importantly, this work emphasizes evaluation discipline.
+We report only metrics that are available in project artifacts,
+explicitly identify missing aggregate MAE exports, and avoid
+unsupported statistical claims. This reporting posture is crucial
+for credible medical-AI research.
+From a systems perspective, the architecture is deployable:
+a Flask inference API and Streamlit analysis interface already
+exist. This allows direct translation from offline experiments
+to interactive validation workflows.
+The key research implication is that restoration quality and
+reliability should be evaluated jointly. A model with high
+PSNR but no uncertainty channel may still be unsafe in
+ambiguous cases. Conversely, uncertainty estimates without
+strong restoration quality are also insufficient. The present
+framework demonstrates a practical compromise: strong denoising gains plus an interpretable reliability surrogate.
+A second implication concerns methodology: transparent reporting of missing metrics and unresolved statistical questions
+should be treated as a strength, not a weakness, in early-stage
+medical AI research. It prevents overstatement and clarifies
+what evidence is currently established versus what remains to
+be validated.
+IX. DEPLOYMENT CONSIDERATIONS
+From a deployment perspective, the current system is practical because it already exposes a Flask inference layer and
+a Streamlit interface. This means the method is not only a
+training-time model but a working application that can be
+extended for clinical experimentation, batch processing, or
+web-based review.
+At the same time, the reported results should be interpreted
+as project-level experimental evidence rather than a final
+clinical benchmark. Additional validation on larger datasets
+and external validation splits would be necessary before any
+clinical claims.
+In real-world deployment, uncertainty output could be used
+to trigger quality-control pathways, such as flagging lowconfidence frames for manual review or requesting additional
+imaging views. This integration pathway is one of the strongest
+practical benefits of uncertainty-aware restoration compared to
+deterministic enhancement alone.
+Operationally, model monitoring should include drift detection, periodic recalibration checks, and failure-case logging. Ultrasound domain shift can arise from scanner vendor
+differences, acquisition protocols, and operator variability;
+therefore, post-deployment surveillance is essential.
+X. LIMITATIONS AND THREATS TO VALIDITY
+Internal validity: The present benchmark does not yet
+include multi-seed variance estimates or repeated cross-
+validation. Observed improvements may contain run-to-run
+sensitivity.
+Construct validity: Speckle is simulated with a multiplicative Gaussian model. Real ultrasound artifacts can deviate from
+this assumption, potentially changing relative performance.
+External validity: Results are based on BUSI-style data
+and internal project artifacts. Generalization to other organs,
+scanners, and acquisition protocols remains to be tested.
+../results/images/before_after.png
+Fig. 3. Representative before-and-after denoising output from the project
+results.
+../results/images/diff_map.png
+Fig. 4. Difference or uncertainty-related visualization generated by the project
+pipeline.
+validation. Measurement validity: MAE is available per-image in
+tooling but not fully exported in current aggregate tables,
+creating an incomplete tri-metric summary.
+Comparator validity: Current quantitative reporting is
+strongest for project-native model variants, while some classical comparators are literature contextual rather than fully
+re-benchmarked under identical implementation conditions in
+this artifact.
+Visualization validity: Uncertainty maps are qualitatively
+../experiments/notebook_run/exports/preview_20260Fig. 7. Additional qualitative preview generated from notebook-run export
+informative, but quantitative calibration metrics (e.g., riskcoverage, expected calibration error in task-aligned formulations) are not yet reported.
+XI. ETHICAL AND TRANSLATIONAL CONSIDERATIONS
+Medical enhancement models should be framed as assistive
+tools, not autonomous diagnostic systems. Denoising may improve readability but can also alter visual perception; therefore,
+transparent indication of model uncertainty is important to
+reduce over-reliance.
+For translational use, governance concerns include traceability of model versions, auditability of inference outputs,
+and documentation of known failure modes. Future extensions
+should include human-factor studies to evaluate how radiologists interpret uncertainty overlays and whether these overlays
+improve decision quality or only increase cognitive load.
+XII. REPRODUCIBILITY AND OPEN SCIENCE STATEMENT
+This paper is grounded in executable project artifacts including model code, API endpoints, and result tables. To
+improve reproducibility for external readers, the next release
+should include: (i) frozen dependency manifests, (ii) scripted
+experiment runners for all reported tables, (iii) seed lists and
+deterministic flags, and (iv) machine-readable metadata for
+each result file.
+We emphasize that reproducibility is not binary. The present
+work is reproducible at prototype level and transparently
+identifies what is required to reach archival, publication-grade
+reproducibility.
+XIII. CONCLUSION
+This study demonstrates that uncertainty-aware U-Net denoising is a credible approach for ultrasound enhancement
+under speckle corruption. The enhanced model shows strong
+gains over baseline in available aggregate metrics, and MC
+dropout provides a useful spatial confidence signal that complements deterministic restoration. The work contributes both
+a measurable denoising improvement and a deployable analysis pipeline.
+More broadly, the study argues for a dual-objective perspective in medical image restoration: optimize image fidelity
+while quantifying predictive reliability. This perspective is
+essential for trustworthy AI in clinical imaging and should
+become standard in future denoising benchmarks.
+XIV. FUTURE WORK
+Future work will focus on publication-grade validation: (1)
+multi-seed and fold-wise statistical testing, (2) complete MAE
+export in all summary tables, (3) external dataset evaluation,
+(4) comparison against stronger classical/deep baselines under
+identical protocols, and (5) uncertainty calibration studies
+(e.g., uncertainty-error correlation and coverage metrics).
+Additional technical directions include domain-adaptive
+training for scanner variation, uncertainty-aware loss shaping,
+and integration with segmentation/classification pipelines to
+evaluate whether denoising-plus-uncertainty improves downstream clinical tasks.
+ACKNOWLEDGMENT
+The authors would like to acknowledge the ultrasound
+image dataset and the project implementation artifacts used
+to prepare this manuscript draft.
+REFERENCES
+[1] O. Ronneberger, P. Fischer, and T. Brox, “U-Net: Convolutional Networks for Biomedical Image Segmentation,” in Medical Image Computing and Computer-Assisted Intervention, 2015.
+[2] Y. Gal and Z. Ghahramani, “Dropout as a Bayesian Approximation:
+Representing Model Uncertainty in Deep Learning,” in ICML, 2016.
+[3] I. Goodfellow, Y. Bengio, and A. Courville, Deep Learning. MIT Press,
+2016.
+[4] K. Dabov, A. Foi, V. Katkovnik, and K. Egiazarian, “Image Denoising
+by Sparse 3-D Transform-Domain Collaborative Filtering,” IEEE Transactions on Image Processing, 2007.
+[5] W. Al-Dhabyani, M. Gomaa, H. Khaled, and A. Fahmy, “Dataset of
+Breast Ultrasound Images,” Data in Brief, 2020.
+[6] Z. Wang, A. C. Bovik, H. R. Sheikh, and E. P. Simoncelli, “Image
+quality assessment: from error visibility to structural similarity,” IEEE
+Transactions on Image Processing, 2004.
+[7] N. Jayant and P. Noll, Digital Coding of Waveforms. Prentice Hall, 1984.
+[8] K. Zhang, W. Zuo, Y. Chen, D. Meng, and L. Zhang, “Beyond a Gaussian Denoiser: Residual Learning of Deep CNN for Image Denoising,”
+IEEE Transactions on Image Processing, 2017.
+[9] A. Kendall and Y. Gal, “What Uncertainties Do We Need in Bayesian
+Deep Learning for Computer Vision?,” in NeurIPS, 2017.
+[10] J. Lehtinen et al., “Noise2Noise: Learning Image Restoration without
+Clean Data,” in ICML, 2018.
+[11] A. Buades, B. Coll, and J.-M. Morel, “A Non-Local Algorithm for Image
+Denoising,” in CVPR, 2005.
+[12] X. Mao, C. Shen, and Y.-B. Yang, “Image Restoration Using Very
+Deep Convolutional Encoder-Decoder Networks with Symmetric Skip
+Connections,” in NeurIPS, 2016.
+[13] K. He, X. Zhang, S. Ren, and J. Sun, “Deep Residual Learning for
+Image Recognition,” in CVPR, 2016.
+[14] P. Isola, J.-Y. Zhu, T. Zhou, and A. A. Efros, “Image-to-Image Translation with Conditional Adversarial Networks,” in CVPR, 2017.
+[15] G. Huang, Z. Liu, L. van der Maaten, and K. Q. Weinberger, “Densely
+Connected Convolutional Networks,” in CVPR, 2017.
